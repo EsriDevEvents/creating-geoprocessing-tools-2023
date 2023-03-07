@@ -5,11 +5,13 @@ arcpy.env.overwriteOutput = True
 proposed_windfarm = arcpy.GetParameter(0)
 field_for_query = arcpy.GetParameterAsText(1)
 wildland_area = arcpy.GetParameter(2)
-road_network = arcpy.GetParameterAsText(3)
+selected_windfarms = arcpy.GetParameterAsText(3)
+road_network = arcpy.GetParameterAsText(4)
 
-# building the query string based on the field choice, and select certain windfarms
+# building the query string based on the field choice
 arcpy.SetProgressor("step", "Querying proposals with a query string...")
-arcpy.AddMessage(f"Analyzing input wind farm layer at {proposed_windfarm.dataSource}")
+layer_property = arcpy.Describe(proposed_windfarm).dataType
+arcpy.AddMessage(f"Analyzing input wind farm layer as the type {layer_property}")
 
 queryString = ""
 if field_for_query == "STATUS":
@@ -40,6 +42,7 @@ if non_wildland_count == 0:
 if road_network == "":
     arcpy.AddWarning("No road network is available, and the script will skip the near analysis.")
     result_layer = outside_wildland_windfarm
+    result_count = non_wildland_count
 else:
     arcpy.SetProgressorLabel("Selecting wind farms next to a road")
     arcpy.SetProgressorPosition(40)
@@ -49,16 +52,18 @@ else:
     roadside_windfarms, roadside_count = \
         arcpy.management.SelectLayerByAttribute(in_layer_or_view=close_to_road_windfarms,
                                                 where_clause="NEAR_DIST = 0")
-    arcpy.AddMessage("There are {0} wind farms in the final selection.".format(roadside_count))
     result_layer = roadside_windfarms
+    result_count = roadside_count
 
-# Copy the result to a scratch GDB
-arcpy.SetProgressorLabel("Generating final results...")
+# Finalize the result
+arcpy.SetProgressorLabel("Generating final selections ...")
 arcpy.SetProgressorPosition(80)
 
 arcpy.management.CopyFeatures(in_features=result_layer,
-                              out_feature_class=r'%scratchGDB%\SelectedWindFarms')
-arcpy.SetParameterAsText(4, r'%scratchGDB%\SelectedWindFarms')
+                              out_feature_class=selected_windfarms)
+
+arcpy.AddMessage(f"There are {result_count} wind farms in the final selection.")
+arcpy.SetParameter(5, result_count)
 
 arcpy.SetProgressorLabel("Results are ready.")
 arcpy.SetProgressorPosition(100)
